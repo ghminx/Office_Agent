@@ -1,0 +1,11 @@
+{
+    "dockerfile_lines": [],
+    "graphs": {
+      "Deep Researcher": "./src/agents/supervisor.py:agent"
+    },
+    "python_version": "3.13",
+    "env": "./.env",
+    "dependencies": [
+      "."
+    ]
+}
