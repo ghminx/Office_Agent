@@ -43,9 +43,16 @@ class EcountSchedule(BaseModel):
     
 class MailTask(BaseModel):
     """메일 발송 작업 위임"""
-    recipient: str = Field(description="받는 사람")
-    subject: str = Field(description="제목")
-    body: str = Field(description="본문")
+    user_content: str = Field(description="사용자 요청 내용 (메일 작성에 필요한 정보)")
+    to_mail: str = Field(description="수신자 메일")
+    from_mail: str = Field(description="발신자 메일")
+    app_password: str = Field(description="발신자 메일 앱 비밀번호")
+    send_name: str = Field(description="발신자 이름")
+    position: str = Field(description="발신자 직책")
+    ext: str = Field(description="발신자 내선번호")
+    files : Optional[str] = Field(description="첨부파일 경로 (선택사항)", default=None)
+    
+
 
 class QuotationTask(BaseModel):
     """견적서 처리 작업 위임 (생성, 유사 견적 비교, 분석)"""
@@ -100,12 +107,13 @@ async def supervisor(state: SupervisorState, config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     
     # 사용 가능한 tool 정의
-    supervisor_tool = [FileSearch, EcountSchedule, MailTask, QuotationTask, WorkflowComplete, think_tool]
+    # supervisor_tool = [FileSearch, EcountSchedule, MailTask, QuotationTask, WorkflowComplete, think_tool]
+    supervisor_tool = [FileSearch, EcountSchedule, MailTask, QuotationTask, WorkflowComplete]
 
     
     # 모델 설정 
     model_name = configurable.supervisor_model
-    supervisor_model = (init_chat_model(model_name)
+    supervisor_model = (init_chat_model(model_name, thinking={"type": "enabled", "budget_tokens": 2000})
                         .bind_tools(supervisor_tool))
     
     # Supervisor 시스템 프롬프트 설정
@@ -124,7 +132,8 @@ async def supervisor(state: SupervisorState, config: RunnableConfig):
     return Command(goto="supervisor_tools", update={"supervisor_messages": [response]})
 
 
-async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Command[Literal["supervisor", "__end__"]]:
+# async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Command[Literal["supervisor", "__end__"]]:
+async def supervisor_tools(state: SupervisorState, config: RunnableConfig):
     
     """Supervisor에서 호출한 도구를 실행
 
@@ -177,40 +186,64 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
     all_tool_messages = []
     update_response = {"supervisor_messages": []}
     
-    # Think_tool 
-    think_tool_calls = []
-    for tool_call in recent_message.tool_calls:
-        if tool_call["name"] == "think_tool":
-            think_tool_calls.append(tool_call)
+    # # Think_tool 
+    # think_tool_calls = []
+    # for tool_call in recent_message.tool_calls:
+    #     if tool_call["name"] == "think_tool":
+    #         think_tool_calls.append(tool_call)
         
-    for tool_call in think_tool_calls:
-        think_content = tool_call['args']['reflection']
-        all_tool_messages.append(ToolMessage(
-            content=think_content, 
-            name = "think_tool",
-            tool_call_id = tool_call['id']
-        ))
+    # for tool_call in think_tool_calls:
+    #     think_content = tool_call['args']['reflection']
+    #     all_tool_messages.append(ToolMessage(
+    #         content=think_content, 
+    #         name = "think_tool",
+    #         tool_call_id = tool_call['id']
+    #     ))
     
-    # 다른 도구들 처리~~ 
+    # FileSearch 도구 호출이 있는지 확인하여 file_search_agent로 이동
 
-    file_search_calls = [
-        tool_call for tool_call in recent_message.tool_calls 
-        if tool_call["name"] == "FileSearch"
-    ]
+    
+    for tool_call in recent_message.tool_calls:
+        
+        # print(state['messages'])
+        # print("===================")
+        # print(tool_call)
+        
+        # FileSearch 도구 호출 처리
+        if tool_call["name"] == "FileSearch":
+            
+            
+            tool_messages = ToolMessage(
+                            content="FileSearch 도구 실행",
+                            name=tool_call["name"],
+                            arg = tool_call["args"],
+                            tool_call_id=tool_call["id"])
+                    
+            return Command(
+                goto="file_search_agent",
+                update={
+                    "messages": state["messages"],
+                    "supervisor_messages": [tool_messages]
+                })
+
+        elif tool_call["name"] == "MailTask":
+            
+            # tool_messages = ToolMessage(
+            #                 content="MailTask 도구 실행",
+            #                 name=tool_call["name"],
+            #                 arg = tool_call["args"],
+            #                 tool_call_id=tool_call["id"])
+                        
+            return Command(
+                goto="mail_classify",
+                update={
+                    # "messages": state["messages"],
+                    "mail_content": tool_call["args"]
+                })
     
     
-    if file_search_calls:
-        return Command(
-            goto="file_search_agent",
-            update={
-                "messages": state["messages"] + all_tool_messages  # 전체 컨텍스트
-            })
     
-    update_response["supervisor_messages"] = all_tool_messages
-    return Command(
-        goto="supervisor",
-        update=update_response
-    ) 
+    
     
 supervisor_builder = StateGraph(SupervisorState, config_schema=Configuration)
 
@@ -225,17 +258,27 @@ supervisor_builder.add_edge(START, "supervisor")  # Entry point to supervisor
 agent = supervisor_builder.compile()
 
 
-async def run():
-    response = await agent.ainvoke({"messages": '전략기획팀 폴더에서 디딤돌 사업에 있는 파일 어떤거 있는지 확인해줘'}, config=RunnableConfig())
-    
-    return response
+# async def run():
+#     user =  '전략기획팀 폴더에서 2025년에 작성한 디딤돌 사업에 있는 파일 어떤거 있는지 확인해줘'
 
-if __name__ == "__main__":
-    import time 
+#     # user = """{
+#     #     "from_mail": "rmsghd456@daum.net",
+#     #     "to_mail": "casu106@naver.com",
+#     #     "app_password": "jmjopxnhcoxfzujg",
+#     #     "user_content": "클라이언트에게 보고서를 예정된 일정에 보내지 못할것 같아서 죄송하다는 메일을 작성해야해"
+#     # }"""
     
-    start = time.time()
-    response = asyncio.run(run())
-    end = time.time()
-    print(f"Execution Time: {end - start} seconds")
-    print(response)
+    
+#     # response = await agent.ainvoke({"messages": user}, config=RunnableConfig())
+#     response = await agent.ainvoke({"messages": user}, config=RunnableConfig())
+    
+#     return response
+
+# if __name__ == "__main__":
+#     import time 
+    
+#     start = time.time()
+#     response = asyncio.run(run())
+#     end = time.time()
+#     print(f"Execution Time: {end - start} seconds")
     
