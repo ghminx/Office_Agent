@@ -75,8 +75,6 @@ async def ecount_calendar_tool(date: str) -> list:
         
     
     
-    
-    
 system_prompt = """너는 Ecount에 등록된 일정을 알려주는 유능한 비서야 
 
                 오늘은 {today} 이야.
@@ -121,4 +119,4 @@ async def run(day):
 if __name__ == "__main__":
     import asyncio
     
-    asyncio.run(run(6))
+    asyncio.run(run(3))

@@ -5,8 +5,6 @@ from rich import print
 
 from typing import Annotated, Optional
 
-
-
 from langchain_core.runnables import RunnableConfig
 from langchain.chat_models import init_chat_model
 from langchain_core.tools import tool
@@ -112,7 +110,7 @@ def search_files(
                 if not ext_list or any(filename_lower.endswith(ext) for ext in ext_list):
                     results.append(full_path)
 
-                    if len(results) >= 20:  # 최대 결과
+                    if len(results) >= 10:  # 최대 결과
                         break
     
     if not results:
@@ -173,7 +171,7 @@ async def file_search_agent(state: FileSearchState, config: RunnableConfig):
         검색 결과를 포함한 상태 업데이트
     """
     configurable = Configuration.from_runnable_config(config)
-    
+
     # 사용 가능한 검색 도구
     search_tools = [search_files]
     
@@ -183,7 +181,7 @@ async def file_search_agent(state: FileSearchState, config: RunnableConfig):
                          .bind_tools(search_tools))
     
     messages = state.get("messages", [])
-    
+
     system_prompt = file_search_agent_prompt.format(
         messages = get_buffer_string(messages)
     )
@@ -230,45 +228,45 @@ async def file_search_agent(state: FileSearchState, config: RunnableConfig):
 # ====================
 # Build Agent
 # ====================
-file_search_builder = StateGraph(FileSearchState, config_schema=Configuration)
-file_search_builder.add_node("file_search_agent", file_search_agent)
-file_search_builder.add_edge(START, "file_search_agent")
+# file_search_builder = StateGraph(FileSearchState, config_schema=Configuration)
+# file_search_builder.add_node("file_search_agent", file_search_agent)
+# file_search_builder.add_edge(START, "file_search_agent")
 
-file_search_agent_graph = file_search_builder.compile()
-
-
-# ====================
-# Test
-# ====================
-state = {
-    'messages': [
-        HumanMessage(
-            content='전략기획팀 폴더에서 2026년 디딤돌 사업에 있는 사업계획서 파일 찾아줘',
-            additional_kwargs={},
-            response_metadata={},
-            id='5f29da7e-a123-4e89-a290-a7f310496fa1'
-        ),
-        ToolMessage(
-            content="사용자 요청: 전략기획팀 폴더에서 2026년 디딤돌 사업에 있는 사업계획서 파일 찾아줘. 이건 단일 작업으로 FileSearch에이전트만 필요. 전략: FileSearch에게 검색경로/키워드로 \'전략기획팀/디딤돌 사업\' 또는 폴더 내\'디딤돌\' 관련 파일을 찾도록 지시. 결과로 파일명,   전체 경로, 파일 유형(예: docx, xlsx, pdf), 마지막    수정일을 포함한 목록을 받는다. 다음 단계: FileSearch 호출.",
-            name='think_tool',
-            tool_call_id='call_VW4EeayQdZyuFzGPMHqtuyG9'
-        )
-    ]
-}
+# file_search_agent_graph = file_search_builder.compile()
 
 
-async def test_file_search():
-    """파일 검색 에이전트 테스트"""
-    response = await file_search_agent_graph.ainvoke(
-        state,
-        config=RunnableConfig()
-    )
+# # ====================
+# # Test
+# # ====================
+# state = {
+#     'messages': [
+#         HumanMessage(
+#             content='전략기획팀 폴더에서 2026년 디딤돌 사업에 있는 사업계획서 파일 찾아줘',
+#             additional_kwargs={},
+#             response_metadata={},
+#             id='5f29da7e-a123-4e89-a290-a7f310496fa1'
+#         ),
+#         ToolMessage(
+#             content="사용자 요청: 전략기획팀 폴더에서 2026년 디딤돌 사업에 있는 사업계획서 파일 찾아줘. 이건 단일 작업으로 FileSearch에이전트만 필요. 전략: FileSearch에게 검색경로/키워드로 \'전략기획팀/디딤돌 사업\' 또는 폴더 내\'디딤돌\' 관련 파일을 찾도록 지시. 결과로 파일명,   전체 경로, 파일 유형(예: docx, xlsx, pdf), 마지막    수정일을 포함한 목록을 받는다. 다음 단계: FileSearch 호출.",
+#             name='think_tool',
+#             tool_call_id='call_VW4EeayQdZyuFzGPMHqtuyG9'
+#         )
+#     ]
+# }
+
+
+# async def test_file_search():
+#     """파일 검색 에이전트 테스트"""
+#     response = await file_search_agent_graph.ainvoke(
+#         state,
+#         config=RunnableConfig()
+#     )
     
-    return response
+#     return response
 
 
-if __name__ == "__main__":
-    response = asyncio.run(test_file_search())
+# if __name__ == "__main__":
+#     response = asyncio.run(test_file_search())
 
 
-print(response['search_results'])
+# print(response['search_results'])

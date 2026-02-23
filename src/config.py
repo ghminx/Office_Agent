@@ -23,14 +23,17 @@ class Configuration:
     search_api_config: Optional[Dict[str, Any]] = None
     
     # 요약 모델 설정 
-    summarization_model: str = "openai:gpt-5-mini"
-    include_source_str: bool = False         
-    
-    # Multi Agent 설정 
+    # summarization_model: str = "openai:gpt-5-mini"
+    summarization_model: str = "claude-sonnet-4-6"
+    include_source_str: bool = False
+
+    # Multi Agent 설정
     number_of_queries: int = 2
     max_workflow_iterations: int = 1
-    supervisor_model: str = "openai:gpt-5-mini"
+    # supervisor_model: str = "openai:gpt-5-mini"
+    supervisor_model: str = "claude-sonnet-4-6"
     sub_agent_model: str = "openai:gpt-5-mini"
+    # sub_agent_model: str = "claude-sonnet-4-6"
     
     
     @classmethod
