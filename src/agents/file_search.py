@@ -24,7 +24,7 @@ from langchain_core.messages import (
 
 from src.config import Configuration
 from src.prompts import file_search_agent_prompt
-
+from src.agents.supervisor import SupervisorState
     
     
 """파일 검색 도구 - 파일명, 확장자 기반 검색"""
@@ -112,7 +112,10 @@ def search_files(
 
                     if len(results) >= 10:  # 최대 결과
                         break
-    
+        else:
+            continue
+        break
+
     if not results:
         return f"'{keywords}' 키워드와 일치하는 파일을 찾지 못했습니다."
 
@@ -141,24 +144,11 @@ def search_files(
 
 
 """파일 검색 에이전트"""
-# ====================
-# State Definitions
-# ====================
-class FileSearchState(MessagesState):
-    """파일 검색 에이전트 상태
-    
-    Attributes:
-        messages: 메시지 (MessagesState에서 상속)
-        search_results: 검색 결과 문자열
-    """
-    # search_results: str
-
-
 
 # ====================
 # File Search Agent
 # ====================
-async def file_search_agent(state: FileSearchState, config: RunnableConfig):
+async def file_search_agent(state: SupervisorState, config: RunnableConfig):
     """파일 검색 에이전트
     
     사용자 요청을 분석하여 적절한 검색 도구를 선택하고 실행

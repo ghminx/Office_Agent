@@ -13,7 +13,6 @@ from langgraph.types import interrupt, Command
 from src.utils import send_smtp
 from src.config import Configuration
 from src.prompts import mail_classify_prompt, mail_generate_prompt
-from langgraph.checkpoint.memory import MemorySaver    
 
 
 

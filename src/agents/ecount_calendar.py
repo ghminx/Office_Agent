@@ -1,21 +1,30 @@
+import asyncio
 import os
-import re
 from playwright.sync_api import Playwright, sync_playwright, expect
 from playwright.async_api import async_playwright
 
 from rich import print
 from dotenv import load_dotenv
 
+from langchain_core.runnables import RunnableConfig
 from langchain.tools import tool 
 from langchain.chat_models import init_chat_model
-from langchain.agents import create_agent
-from langchain.messages import SystemMessage, HumanMessage
 
-from src.utils import get_today
+from langchain_core.messages import (
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+    get_buffer_string
+)
+
+from langgraph.graph import START, END, StateGraph, MessagesState
+from langgraph.types import Command
+
+from src.config import Configuration
+from src.prompts import ecount_agent_prompt
+from src.agents.supervisor import SupervisorState
 
 load_dotenv()
-
-
 
 
 @tool
@@ -74,49 +83,74 @@ async def ecount_calendar_tool(date: str) -> list:
         return event
         
     
+"""ECount 일정 확인 에이전트"""
+
+
+# ====================
+# File Search Agent
+# ====================
+async def ecount_agent(state: SupervisorState, config: RunnableConfig):
+    """ECount 일정 확인 에이전트
     
-system_prompt = """너는 Ecount에 등록된 일정을 알려주는 유능한 비서야 
+    사용자 요청을 분석하여 적절한 검색 도구를 선택하고 실행
+    
+    Args:
+        state: EcountState - 현재 상태
+        config: RunnableConfig - 구성 정보
+        
+    Returns:
+        검색 결과를 포함한 상태 업데이트
+    """
+    configurable = Configuration.from_runnable_config(config)
+    print(state)
+    # 사용 가능한 검색 도구
+    search_tools = [ecount_calendar_tool]
+    
+    # 모델 설정
+    model_name = configurable.sub_agent_model
+    ecount_model = (init_chat_model(model_name)
+                         .bind_tools(search_tools))
+    
+    messages = state.get("messages", [])
 
-                오늘은 {today} 이야.
-
-                사용자가 원하는 날짜에 어떤 일정이 등록되어있는지 알려줘.
+    system_prompt = ecount_agent_prompt.format(
+        messages = get_buffer_string(messages)
+    )
+    
+    # LLM 호출
+    response = await ecount_model.ainvoke([SystemMessage(content=system_prompt)])
+    
+    # 도구 호출이 있으면 실행
+    if response.tool_calls:
+        
+        for tool_call in response.tool_calls:
+            tool_args = tool_call["args"]
+            
+            try:
+                result = await ecount_calendar_tool.ainvoke(tool_args)
+            except Exception as e:
+                result = f"일정 검색 실행 중 오류 발생: {str(e)}"
                 
-                사용자가 년도와 월을 명시하지 않으면, 오늘 날짜의 년도와 월을 기준으로 일정을 찾아줘.
-                  
-                  만약 등록된 일정이 없으면 "등록된 일정이 없습니다."라고 답변해줘.
-                  
-                  제목, 날짜/시간, 참석자 정보를 포함해서 간결하게 작성해줘. 
-                  
-                  Example format:
-                  [등록된 일정이 존재 하는 경우]
-                  0000년 O월 OO일 일정을 알려드립니다.
 
-                    - 제목: [일정 제목]
-                    - 날짜/시간: [날짜/시간]
-                    - 참석자: [참석자]
-                                      
-                  [등록된 일정이 없는 경우]
-                    등록된 일정이 없습니다.
-                    
-                  """
-
-system_prompt = system_prompt.format(today=get_today())
-
-
-agent = create_agent(
-    "openai:gpt-4o-mini",
-    tools=[ecount_calendar_tool],
-    system_prompt=system_prompt,
-)
-
-
-async def run(day):
-
-    response = await agent.ainvoke({"messages": [{"role": "user", "content": f"2월 {day}일 등록된 일정 알려줘"}]})
-
-    print(response['messages'][-1].content)
-
-if __name__ == "__main__":
-    import asyncio
+            # tool 결과를 LLM에 다시 전달해서 포맷팅
+            tool_result = "\n\n".join(result) if isinstance(result, list) else str(result)
+            
+            formatted_llm = init_chat_model(model_name)
+            response = await formatted_llm.ainvoke([
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=tool_result)
+            ])
+            
+        
+        return Command(
+            goto=END,
+            update={
+                "messages": [response]
+            }
+        )
     
-    asyncio.run(run(24))
+    # 도구 호출 없으면 그냥 종료
+    return Command(
+        goto=END,
+        update={"messages": [response]}
+    )

@@ -17,7 +17,7 @@ from src.prompts import (
     supervisor_system_prompt
     )
 from langchain_core.messages import (
-    SystemMessage, 
+    SystemMessage,
     ToolMessage,
     )
 
@@ -30,12 +30,9 @@ from src.utils import (
 # ========================================
 class FileSearch(BaseModel):
     """파일 검색 작업 위임"""
-    # query: str = Field(description="검색할 파일 키워드")
-    # path: str = Field(description="검색 시작 경로", default=".")
     
 class EcountSchedule(BaseModel):
     """Ecount 일정 조회 작업 위임"""
-    date: str = Field(description="조회할 날짜 (YYYY-MM-DD)")
     
 class MailTask(BaseModel):
     """메일 발송 작업 위임"""
@@ -75,7 +72,7 @@ async def supervisor(state: SupervisorState, config: RunnableConfig):
 
     WorkFlow
     1. 사용자 요청 수신 → think_tool로 의도 분석
-    2. 적절한 에이전트 선택 (FileSearch, EcountSchedule, MailTask, QuotationTask)
+    2. 적절한 에이전트 선택 (FileSearch, EcountSchedule, MailTask)
     3. supervisor_tools로 이동하여 선택된 도구 실행
     
     
@@ -107,7 +104,6 @@ async def supervisor(state: SupervisorState, config: RunnableConfig):
     
     response = await supervisor_model.ainvoke([SystemMessage(content=supervisor_prompt)] +
                                                messages + supervisor_messages)
-    
     return Command(goto="supervisor_tools", update={"supervisor_messages": [response]})
 
 
@@ -163,9 +159,22 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig):
             
         elif tool_call["name"] == "EcountSchedule":
             
-            return None
+            return Command(
+                goto="ecount_agent",
+                update={
+                    "supervisor_messages": [ToolMessage(
+                        content="EcountSchedule 도구 실행",
+                        name=tool_call["name"],
+                        tool_call_id=tool_call["id"]
+                    )]
+                }
+            )
         
 
-    # 도구 호출이 없으면 종료 돌아감
-    return Command(goto=END)
+    # 도구 호출이 없으면 supervisor 응답을 그대로 사용자에게 전달
+    return Command(
+        goto=END,
+        update={"messages": [recent_message]}
+    )
+
 

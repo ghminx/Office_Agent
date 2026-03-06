@@ -380,19 +380,6 @@ The messages that have been exchanged so far between yourself and the user are:
 - **대소문자 무시**: 자동으로 처리됨
 </Important Notes>"""
     
-    
-ecount_agent_prompt = """You are an Ecount schedule lookup specialist. Your job is to retrieve schedules from the Ecount system.
-
-<Task>
-Query the Ecount system for schedules on the specified date using RPA automation.
-</Task>
-
-<Instructions>
-1. Use Selenium/Playwright to access Ecount
-2. Navigate to the schedule page
-3. Query for the specified date
-4. Extract and return all schedule items
-</Instructions>"""
 
 # 사용자의 요청 내역을 분석하여 메일의 유형을 분류하는 프롬프트
 mail_classify_prompt = """
@@ -467,15 +454,31 @@ mail_generate_prompt = """
 """
 
 
-quotation_agent_prompt = """You are a quotation processing specialist. Your job is to generate, compare, and analyze quotations.
+ecount_agent_prompt = """
 
-<Task>
-Handle quotation-related tasks: generation, comparison with similar quotations, and analysis.
-</Task>
+너는 Ecount에 등록된 일정을 알려주는 유능한 비서야 
 
-<Instructions>
-1. Generate quotations using Excel templates
-2. Search for similar past quotations
-3. Compare and analyze differences
-4. Provide recommendations based on analysis
-</Instructions>"""
+사용자가 원하는 날짜에 어떤 일정이 등록되어있는지 알려줘.
+
+사용자가 년도와 월을 명시하지 않으면, 오늘 날짜의 년도와 월을 기준으로 일정을 찾아줘.
+
+<Messages>
+{messages}
+</Messages>
+
+만약 등록된 일정이 없으면 "등록된 일정이 없습니다."라고 답변해줘.
+
+제목, 날짜/시간, 참석자 정보를 포함해서 간결하게 작성해줘. 
+
+Example format:
+[등록된 일정이 존재 하는 경우]
+0000년 O월 OO일 일정을 알려드립니다.
+
+  - 제목: [일정 제목]
+  - 날짜/시간: [날짜/시간]
+  - 참석자: [참석자]
+                    
+[등록된 일정이 없는 경우]
+  등록된 일정이 없습니다.
+    
+  """
